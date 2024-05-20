@@ -41,25 +41,16 @@ get_weather_translation() {
 
 get_wind_direction() {
     local degrees=$1
-    if (( degrees >= 0 && degrees <= 22 )) || (( degrees >= 338 && degrees <= 360 )); then
-        echo "Šiaurės"
-    elif (( degrees >= 23 && degrees <= 67 )); then
-        echo "Šiaurės rytų"
-    elif (( degrees >= 68 && degrees <= 112 )); then
-        echo "Rytų"
-    elif (( degrees >= 113 && degrees <= 157 )); then
-        echo "Pietų rytų"
-    elif (( degrees >= 158 && degrees <= 202 )); then
-        echo "Pietų"
-    elif (( degrees >= 203 && degrees <= 247 )); then
-        echo "Pietų vakarų"
-    elif (( degrees >= 248 && degrees <= 292 )); then
-        echo "Vakarų"
-    elif (( degrees >= 293 && degrees <= 337 )); then
-        echo "Šiaurės vakarų"
-    else
-        echo "Neatpažinta vėjo kryptis"
-    fi
+    case $(((degrees+22)%360/45)) in
+        0) echo "↑ "   ;; # Šiaurė
+        1) echo "↗ "   ;; # Šiaurės rytai
+        2) echo "→ "   ;; # Rytai
+        3) echo "↘ "   ;; # Pietų rytai
+        4) echo "↓ "   ;; # Pietūs
+        5) echo "↙ "   ;; # Pietų vakarai
+        6) echo "← "   ;; # Vakarai
+        7) echo "↖ "   ;; # Šiaurės vakarai
+    esac
 }
 
 get_day_of_week() {
@@ -120,12 +111,17 @@ for ((i=0; i<72; i+=1)); do
   forecast_time=$(echo "$weather_data" | jq ".forecastTimestamps[$i].forecastTimeUtc" | sed 's/"//g')
   forecast_date=$(date -d "$forecast_time" "+%Y-%m-%d")
   forecast_hour=$(date -d "$forecast_time" "+%H:%M")
+
   air_temp=$(echo "$weather_data" | jq ".forecastTimestamps[$i].airTemperature" | xargs printf "%.1f")
   feels_like_temp=$(echo "$weather_data" | jq ".forecastTimestamps[$i].feelsLikeTemperature" | xargs printf "%.1f")
   cloud_cover=$(echo "$weather_data" | jq ".forecastTimestamps[$i].cloudCover" | xargs printf "%.1f")
   condition_code=$(echo "$weather_data" | jq ".forecastTimestamps[$i].conditionCode" | sed 's/"//g')
+
   wind_speed=$(echo "$weather_data" | jq ".forecastTimestamps[$i].windSpeed" | xargs printf "%.1f")
   wind_gust=$(echo "$weather_data" | jq ".forecastTimestamps[$i].windGust" | xargs printf "%.1f")
+  wind_direction=$(echo "$weather_data" | jq ".forecastTimestamps[$i].windDirection" | xargs printf "%d")
+  wind_direction_arrow=$(get_wind_direction "$wind_direction")
+
   sea_level_pressure=$(echo "$weather_data" | jq ".forecastTimestamps[$i].seaLevelPressure" | xargs printf "%.1f")
   total_precipitation=$(echo "$weather_data" | jq ".forecastTimestamps[$i].totalPrecipitation" | xargs printf "%.1f")
 
@@ -137,17 +133,22 @@ for ((i=0; i<72; i+=1)); do
 
   wind_speed_formatted=$(printf "%.1f" "$wind_speed" | tr ',' '.')
   wind_gust_formatted=$(printf "%.1f" "$wind_gust" | tr ',' '.')
+  air_temp_formatted=$(printf "%.1f" "$air_temp" | tr ',' '.')
+  feels_like_temp_formatted=$(printf "%.1f" "$feels_like_temp" | tr ',' '.')
+  cloud_cover_formatted=$(printf "%.1f" "$cloud_cover" | tr ',' '.')
+  total_precipitation_formatted=$(printf "%.1f" "$total_precipitation" | tr ',' '.')
+  sea_level_pressure_formatted=$(printf "%.1f" "$sea_level_pressure" | tr ',' '.')
 
   precipitation_color=$(get_precipitation_color "$total_precipitation")
   temperature_color=$(get_temperature_color "$air_temp")
   cloud_cover_color=$(get_cloud_cover_color "$cloud_cover")
 
-  printf "%-10s %b%-6s%b %b%-6s%b %b%-10s%b %b%-10s%b %-9s %-12s %b%-10s%b\n" \
-    "$forecast_hour" "$temperature_color" "$(printf "%.1f" "$air_temp" | tr ',' '.') °C" "$reset_color" \
-    "$temperature_color" "$(printf "%.1f" "$feels_like_temp" | tr ',' '.') °C" "$reset_color" \
-    "$cloud_cover_color" "$(printf "%.1f" "$cloud_cover" | tr ',' '.') %" "$reset_color" \
-    "$precipitation_color" "$(printf "%.1f" "$total_precipitation" | tr ',' '.') mm" "$reset_color" \
-    "$wind_speed_formatted ($wind_gust_formatted) m/s" "$(printf "%.1f" "$sea_level_pressure" | tr ',' '.') hPa" \
+  printf "%-10s %b%-6s%b %b%-6s%b %b%-10s%b %b%-10s%b %-4s $wind_direction_arrow%-4s %-12s %b%-10s%b\n" \
+    "$forecast_hour" "$temperature_color" "$air_temp_formatted °C" "$reset_color" \
+    "$temperature_color" "$feels_like_temp_formatted °C" "$reset_color" \
+    "$cloud_cover_color" "$cloud_cover_formatted %" "$reset_color" \
+    "$precipitation_color" "$total_precipitation_formatted mm" "$reset_color" \
+    "$wind_speed_formatted" "$wind_gust_formatted" "$sea_level_pressure_formatted hPa" \
     "$reset_color" "$(get_weather_translation "$condition_code")" "$reset_color"
 done
 
